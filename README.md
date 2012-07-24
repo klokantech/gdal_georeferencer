@@ -1,4 +1,4 @@
-georeferencer_gdal
+gdal_georeferencer
 ==================
 
 Use this to georeference and warp local raster image of a map
@@ -6,7 +6,7 @@ that is on the Georeferencer.org site.
 
 Example:
 
-    $ python georeferencer_gdal.py \
+    $ python gdal_georeferencer.py \
             -s_srs epsg:4326 \
             -t_srs epsg:900913 \
             -map 4I8A6MZxOzQeiWpo2S37aZ \

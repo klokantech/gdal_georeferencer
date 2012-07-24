@@ -57,7 +57,7 @@ def main(argc, argv):
         raise Exception('No map name')
     if token_path is None:
         import os.path
-        token_path = os.path.expanduser('~/.georeferencer_gdal')
+        token_path = os.path.expanduser('~/.gdal_georeferencer')
 
     src = gdal.Open(src_path)
     if src is None:
