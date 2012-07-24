@@ -21,4 +21,4 @@ You need to have an account on the site. The script uses OAuth
 to authenticate and will ask you to validate the authentication
 in you browser the first time it runs.
 
-Needs GDAL with Python support and the oauth2 module.
+Needs GDAL with Python support.
