@@ -7,16 +7,15 @@ that is on the Georeferencer.org site.
 Example:
 
     $ python gdal_georeferencer.py \
-            -s_srs epsg:4326 \
-            -t_srs epsg:900913 \
-            -map 4I8A6MZxOzQeiWpo2S37aZ \
+            -srs epsg:4326 \
+            4I8A6MZxOzQeiWpo2S37aZ \
             komensky.jp2 \
-            komensky_georeferenced.vrt \
-            komensky_warped.vrt
+            komensky_warped.tif
 
-This will read GCPs and cutline from Georeferencer and create
-two VRT files. One with the georeference, one already warped
-with default settings.
+This will read GCPs and cutline from Georeferencer and reproject
+the source raster into a new GeoTiff file. You can set the output
+format with the `-of` option. Use `-of vrt` to create a VRT warped
+file.
 
 You need to have an account on the site. The script uses OAuth
 to authenticate and will ask you to validate the authentication

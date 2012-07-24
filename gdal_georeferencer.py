@@ -8,8 +8,10 @@ from __future__ import with_statement
 
 import json
 import oauth2 as oauth
+import os
 from osgeo import gdal
 from osgeo import osr
+import tempfile
 
 
 # Values from the Google API Console, don't change.
@@ -18,21 +20,19 @@ consumer_secret = 'bVNqpXTMDtnOEDhR8IzapwL6'
 
 
 def main(argc, argv):
-    s_srs = None
-    t_srs = None
-    map_name = None
+    srs = None
+    dst_driver = None
     token_path = None
 
     i = 1
     while i < argc:
-        if argv[i] == '-s_srs' and i + 1 < argc:
-            s_srs = sanitize_srs(argv[i + 1])
+        if argv[i] == '-srs' and i + 1 < argc:
+            srs = sanitize_srs(argv[i + 1])
             i += 2
-        elif argv[i] == '-t_srs' and i + 1 < argc:
-            t_srs = sanitize_srs(argv[i + 1])
-            i += 2
-        elif argv[i] == '-map' and i + 1 < argc:
-            map_name = argv[i + 1]
+        elif argv[i] == '-of' and i + 1 < argc:
+            dst_driver = gdal.GetDriverByName(argv[i + 1])
+            if dst_driver is None:
+                raise Exception('Invalid driver name ' + argv[i + 1])
             i += 2
         elif argv[i] == '-token' and i + 1 < argc:
             token_path = argv[i + 1]
@@ -44,17 +44,15 @@ def main(argc, argv):
             break
 
     if i + 2 < argc:
-        src_path = argv[i]
-        georef_path = argv[i + 1]
-        warped_path = argv[i + 2]
+        map_name = argv[i]
+        src_path = argv[i + 1]
+        dst_path = argv[i + 2]
     else:
         print_usage(argv[0])
         return
 
-    if t_srs is None:
-        raise Exception('No target SRS')
-    if map_name is None:
-        raise Exception('No map name')
+    if dst_driver is None:
+        dst_driver = gdal.GetDriverByName('GTiff')
     if token_path is None:
         import os.path
         token_path = os.path.expanduser('~/.gdal_georeferencer')
@@ -63,29 +61,54 @@ def main(argc, argv):
     if src is None:
         raise Exception("Can't open " + src_path)
 
-    if s_srs is None:
-        s_srs = sanitize_srs(src.GetProjection())
-        if s_srs is None:
-            raise Exception('No source SRS')
+    if srs is None:
+        text = src.GetProjection()
+        if text:
+            srs = sanitize_srs(text)
+    if srs is None:
+        raise Exception('No source SRS')
 
     georef = read_georeference(map_name, token_path, src.RasterXSize, src.RasterYSize)
-    gcps = transform_gcps(georef['control_points'], s_srs)
+    gcps = transform_gcps(georef['control_points'], srs)
     if len(gcps) < 3:
         raise Exception('Not enough GCPs')
 
-    vrt_driver = gdal.GetDriverByName("VRT")
-    vrt = vrt_driver.CreateCopy(georef_path, src)
-    vrt.SetProjection(s_srs)
-    vrt.SetGCPs(gcps, s_srs)
-    dst = gdal.AutoCreateWarpedVRT(vrt, s_srs, t_srs)
-    if dst is None:
+    if dst_driver.ShortName == 'VRT':
+        georefed_path = dst_path + '.aux'
+    else:
+        georefed_path = tempfile.mktemp()
+
+    vrt_driver = gdal.GetDriverByName('VRT')
+    georefed = vrt_driver.CreateCopy(georefed_path, src)
+    georefed.SetProjection(srs)
+    georefed.SetGCPs(gcps, srs)
+
+    if dst_driver.ShortName == 'VRT':
+        warped_path = dst_path
+    else:
+        warped_path = tempfile.mktemp()
+
+    warped = gdal.AutoCreateWarpedVRT(georefed, srs, srs)
+    if warped is None:
         raise Exception("Can't warp")
-    dst.SetDescription(warped_path)
-    del dst
-    del vrt
+    warped.SetDescription(warped_path)
 
     if georef['cutline']:
+        del warped
         add_cutline(warped_path, georef['cutline'])
+        warped = gdal.Open(warped_path)
+
+    if dst_driver.ShortName != 'VRT':
+        # This is necessary, because otherwise we won't
+        # be able to interrupt the process.
+        import signal
+        signal.signal(signal.SIGINT, signal.SIG_DFL)
+
+        print "Warping ..."
+        dst = dst_driver.CreateCopy(dst_path, warped, callback=gdal.TermProgress)
+
+        os.remove(warped_path)
+        os.remove(georefed_path)
 
 
 def sanitize_srs(text):
@@ -201,7 +224,7 @@ def write_token(path, token):
 
 
 def print_usage(progname):
-    print 'usage: %s [-token path] -s_srs SRS -t_srs SRS input georef_vrt warped_vrt' % (progname,)
+    print 'usage: %s [-token path] -srs SRS -of DRIVER map_name input output' % (progname,)
 
 
 if __name__ == "__main__":
