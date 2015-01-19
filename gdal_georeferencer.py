@@ -964,7 +964,12 @@ def main(argc, argv):
         del warped
         add_cutline(warped_path, georef['cutline'])
         warped = gdal.Open(warped_path)
-
+    
+    if warped.RasterCount == 3:
+        del warped
+        add_alpha(warped_path)
+        warped = gdal.Open(warped_path)
+    
     if dst_driver.ShortName != 'VRT':
         # This is necessary, because otherwise we won't
         # be able to interrupt the process.
@@ -1009,6 +1014,20 @@ def add_cutline(path, cutline):
     with open(path, 'wb') as f:
         f.write(text)
 
+def add_alpha(path):
+    with open(path, 'rb') as f:
+        text = f.read()
+    # Add the warping options
+    text = text.replace("""<BlockXSize>""","""<VRTRasterBand dataType="Byte" band="%i" subClass="VRTWarpedRasterBand">
+    <ColorInterp>Alpha</ColorInterp>
+  </VRTRasterBand>
+  <BlockXSize>""" % 4)
+    text = text.replace("""</GDALWarpOptions>""", """<DstAlphaBand>%i</DstAlphaBand>
+  </GDALWarpOptions>""" % 4)
+    text = text.replace("""</WorkingDataType>""", """</WorkingDataType>
+    <Option name="INIT_DEST">0</Option>""")
+    with open(path, 'wb') as f:
+        f.write(text)
 
 def read_georeference(map_name, token_path, x_size, y_size):
     consumer = Consumer(consumer_key, consumer_secret)
