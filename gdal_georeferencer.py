@@ -11,6 +11,7 @@ import os
 from osgeo import gdal
 from osgeo import osr
 import tempfile
+import urllib2
 
 
 # Values from the Google API Console, don't change.
@@ -1030,27 +1031,6 @@ def add_alpha(path):
         f.write(text)
 
 def read_georeference(map_name, token_path, x_size, y_size):
-    consumer = Consumer(consumer_key, consumer_secret)
-    token = read_token(token_path)
-    if token is None:
-        print 'Fetching request token ...'
-        gen = get_access_token(consumer, "georeferencer3")
-        url = gen.next()
-
-        print
-        print "Authentication page will be opened in your browser."
-        print "Press enter after you are done with it."
-        print
-        import webbrowser
-        webbrowser.open(url)
-        time.sleep(2)
-        raw_input('Continue? ')
-
-        print 'Fetching access token ...'
-        token = gen.next()
-        write_token(token_path, token)
-
-    client = Client(consumer, token)
     params = urllib.urlencode({
         'map': map_name,
         'x_size': x_size,
@@ -1059,10 +1039,13 @@ def read_georeference(map_name, token_path, x_size, y_size):
     georef_url = 'http://georeferencer3.appspot.com/api/georeference?' + params
 
     print 'Fetching georeference ...'
-    resp, content = client.request(georef_url, 'GET')
-    if resp['status'] != '200':
-        raise Exception("Invalid response %s" % (resp['status'],))
-    return json.loads(content)
+    resp = urllib2.urlopen(georef_url)
+    status = resp.getcode()
+    if status != 200:
+        raise Exception("Invalid response %s" % (status,))
+    data = json.loads(resp.read())
+    resp.close()
+    return data
 
 
 def get_access_token(consumer, app_name):
